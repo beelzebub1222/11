@@ -7,7 +7,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
 # ================= CONFIG =================
-BOT_TOKEN = os.getenv("8713108517:AAEJy91OXF6EogSH1fdevYGmZ3go-W4UMJc")
+BOT_TOKEN = os.getenv("8713108517:AAEJy91OXF6EogSH1fdevYGmZ3go-W4UMJc")  # Isi token di Railway Variables
 THREADS = int(os.getenv("THREADS", "10"))
 TIMEOUT = 5
 
@@ -68,12 +68,10 @@ class Scanner:
 
     def scan(self, domain):
         cname = self.get_cname(domain)
-
         if not cname:
             return f"❌ {domain} (No CNAME)"
 
         service = self.detect(cname)
-
         if not service:
             return f"⚪ {domain} → {cname} (Unknown)"
 
@@ -106,18 +104,22 @@ async def scan_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ================= FILE =================
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    doc = update.message.document
+    if not update.message.document:
+        await update.message.reply_text("❌ Kirim file .txt saja")
+        return
 
+    doc = update.message.document
     if not doc.file_name.endswith(".txt"):
         await update.message.reply_text("❌ File harus .txt")
         return
 
     file = await doc.get_file()
-    await file.download_to_drive("domains.txt")
+    tmp_path = "/tmp/domains.txt"  # Railway friendly path
+    await file.download_to_drive(tmp_path)
 
     await update.message.reply_text("📂 Scanning file...")
 
-    with open("domains.txt") as f:
+    with open(tmp_path) as f:
         domains = list(set(
             d.strip().lower()
             for d in f
@@ -137,31 +139,24 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 vuln.append(r)
 
     msg = f"✅ Done\nTotal: {len(domains)}\n🔥 Vuln: {len(vuln)}\n\n"
-
     if vuln:
-        msg += "\n".join(vuln[:20])
+        msg += "\n".join(vuln[:20])  # tampil 20 teratas
 
     await update.message.reply_text(msg)
 
 # ================= MAIN =================
 def main():
-    if not BOT_TOKEN:'8713108517:AAEJy91OXF6EogSH1fdevYGmZ3go-W4UMJc'
-        print("❌ BOT_TOKEN belum di set")
+    if not BOT_TOKEN:
+        print("❌ BOT_TOKEN belum di set di Railway Variables")
         return
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("scan", scan_cmd))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_file))
 
     print("🤖 Bot running...")
-
-    while True:
-        try:
-            app.run_polling()
-        except Exception as e:
-            print("Restarting...", e)
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
