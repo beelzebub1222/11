@@ -157,7 +157,7 @@ def main():
         print("❌ BOT_TOKEN not set!")
         return
 
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app = ApplicationBuilder().token(8713108517:AAEJy91OXF6EogSH1fdevYGmZ3go-W4UMJc).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("scan", scan_command))
