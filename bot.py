@@ -9,20 +9,20 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, Con
 # ================= CONFIG =================
 BOT_TOKEN = os.getenv("8713108517:AAEJy91OXF6EogSH1fdevYGmZ3go-W4UMJc")
 THREADS = int(os.getenv("THREADS", "10"))
-TIMEOUT = 100
+TIMEOUT = 5
 
 # ================= FINGERPRINT =================
 FINGERPRINTS = {
     "AWS S3": {
         "cnames": ["amazonaws.com"],
-        "signatures": ["NoSuchBucket", "The specified bucket does not exist"]
+        "signatures": ["NoSuchBucket"]
     },
     "GitHub Pages": {
         "cnames": ["github.io"],
         "signatures": ["There isn't a GitHub Pages site here"]
     },
     "Heroku": {
-        "cnames": ["herokuapp.com", "herokudns.com"],
+        "cnames": ["herokuapp.com"],
         "signatures": ["no such app"]
     },
     "Vercel": {
@@ -39,25 +39,24 @@ FINGERPRINTS = {
 class Scanner:
     def __init__(self):
         self.lock = threading.Lock()
-        self.vuln_count = 0
+        self.vuln = 0
 
     def get_cname(self, domain):
         try:
-            answers = dns.resolver.resolve(domain, "CNAME")
-            return str(answers[0].target).rstrip(".")
+            return str(dns.resolver.resolve(domain, "CNAME")[0].target).rstrip(".")
         except:
             return None
 
-    def detect_service(self, cname):
+    def detect(self, cname):
         if not cname:
             return None
         for service, data in FINGERPRINTS.items():
-            for pattern in data["cnames"]:
-                if pattern in cname.lower():
+            for c in data["cnames"]:
+                if c in cname.lower():
                     return service
         return None
 
-    def check_takeover(self, domain, service):
+    def check(self, domain, service):
         try:
             r = requests.get(f"https://{domain}", timeout=TIMEOUT)
             for sig in FINGERPRINTS[service]["signatures"]:
@@ -73,14 +72,14 @@ class Scanner:
         if not cname:
             return f"❌ {domain} (No CNAME)"
 
-        service = self.detect_service(cname)
+        service = self.detect(cname)
 
         if not service:
             return f"⚪ {domain} → {cname} (Unknown)"
 
-        if self.check_takeover(domain, service):
+        if self.check(domain, service):
             with self.lock:
-                self.vuln_count += 1
+                self.vuln += 1
             return f"🔥 {domain} → {service} TAKEOVER!"
 
         return f"✅ {domain} → {service}"
@@ -91,36 +90,34 @@ scanner = Scanner()
 # ================= COMMAND =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 Takeover Scanner Bot (Railway Ready)\n\n"
-        "Commands:\n"
+        "🤖 Takeover Scanner Bot (Railway)\n\n"
         "/scan domain.com\n"
-        "Upload .txt file untuk mass scan"
+        "Upload .txt untuk mass scan"
     )
 
-async def scan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def scan_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("❌ Usage: /scan domain.com")
+        await update.message.reply_text("❌ /scan domain.com")
         return
 
-    domain = context.args[0].strip().lower()
-    result = scanner.scan(domain)
-    await update.message.reply_text(result)
+    domain = context.args[0].lower()
+    res = scanner.scan(domain)
+    await update.message.reply_text(res)
 
-# ================= FILE SCAN =================
+# ================= FILE =================
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     doc = update.message.document
 
     if not doc.file_name.endswith(".txt"):
-        await update.message.reply_text("❌ Upload file .txt")
+        await update.message.reply_text("❌ File harus .txt")
         return
 
     file = await doc.get_file()
-    path = "domains.txt"
-    await file.download_to_drive(path)
+    await file.download_to_drive("domains.txt")
 
-    await update.message.reply_text("📂 File diterima, scanning...")
+    await update.message.reply_text("📂 Scanning file...")
 
-    with open(path) as f:
+    with open("domains.txt") as f:
         domains = list(set(
             d.strip().lower()
             for d in f
@@ -134,17 +131,12 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         futures = [executor.submit(scanner.scan, d) for d in domains]
 
         for future in as_completed(futures):
-            res = future.result()
-            results.append(res)
+            r = future.result()
+            results.append(r)
+            if "🔥" in r:
+                vuln.append(r)
 
-            if "🔥" in res:
-                vuln.append(res)
-
-    msg = (
-        f"✅ Scan selesai!\n"
-        f"Total: {len(domains)}\n"
-        f"🔥 Vuln: {len(vuln)}\n\n"
-    )
+    msg = f"✅ Done\nTotal: {len(domains)}\n🔥 Vuln: {len(vuln)}\n\n"
 
     if vuln:
         msg += "\n".join(vuln[:20])
@@ -154,23 +146,22 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ================= MAIN =================
 def main():
     if not BOT_TOKEN:
-        print("❌ BOT_TOKEN not set!")
+        print("❌ BOT_TOKEN belum di set")
         return
 
-    app = ApplicationBuilder().token(8713108517:AAEJy91OXF6EogSH1fdevYGmZ3go-W4UMJc).build()
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("scan", scan_command))
+    app.add_handler(CommandHandler("scan", scan_cmd))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_file))
 
-    print("🤖 Bot running on Railway...")
+    print("🤖 Bot running...")
 
-    # Auto restart loop
     while True:
         try:
             app.run_polling()
         except Exception as e:
-            print("Restarting bot:", e)
+            print("Restarting...", e)
 
 if __name__ == "__main__":
     main()
