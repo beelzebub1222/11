@@ -145,7 +145,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ================= MAIN =================
 def main():
-    if not BOT_TOKEN:"8713108517:AAEJy91OXF6EogSH1fdevYGmZ3go-W4UMJc"
+    if not BOT_TOKEN:'8713108517:AAEJy91OXF6EogSH1fdevYGmZ3go-W4UMJc'
         print("❌ BOT_TOKEN belum di set")
         return
 
